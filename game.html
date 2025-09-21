@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Player</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            width: 100%;
+            height: 100vh;
+            max-width: 1200px;
+            max-height: 800px;
+            border: 2px solid #333;
+            background: #222;
+            position: relative;
+        }
+        #gameFrame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+        }
+        .controls button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            margin: 0 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .controls button:hover {
+            background: #0056b3;
+        }
+        .status {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: #fff;
+            background: rgba(0,0,0,0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div class="controls">
+            <button onclick="reloadGame()">🔄 Reload</button>
+            <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+            <button onclick="goBack()">← Back</button>
+        </div>
+        <div class="status" id="status">Loading game...</div>
+        <iframe id="gameFrame" src="about:blank" allow="autoplay; fullscreen; gamepad; microphone; camera"></iframe>
+    </div>
+
+    <script>
+        let gameFrame = document.getElementById('gameFrame');
+        let status = document.getElementById('status');
+
+        function loadGame() {
+            // Create a blob URL with the game HTML to avoid CORS issues
+            const gameHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game</title>
+    <style>
+        body { margin: 0; padding: 0; background: #000; overflow: hidden; }
+        canvas { display: block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <script>
+        // Override localStorage to prevent sandbox errors
+        if (typeof Storage !== "undefined") {
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+            } catch(e) {
+                // Create a mock localStorage
+                window.localStorage = {
+                    _data: {},
+                    setItem: function(key, value) { this._data[key] = String(value); },
+                    getItem: function(key) { return this._data[key] || null; },
+                    removeItem: function(key) { delete this._data[key]; },
+                    clear: function() { this._data = {}; },
+                    get length() { return Object.keys(this._data).length; },
+                    key: function(index) { return Object.keys(this._data)[index] || null; }
+                };
+            }
+        }
+        
+        // Load game scripts dynamically
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+        
+        // Try to load main game files
+        async function initGame() {
+            try {
+                // Try different possible locations for game files
+                const possibleScripts = [
+                    '/c3main.js',
+                    '/main.js',
+                    '/game.js',
+                    '/resources/game-cdn.poki.com/c3main.js',
+                    '/resources/ccbb109c-df7c-4dc8-9ad5-8c827f18a772.poki-gdn.com/c3main.js'
+                ];
+                
+                for (const script of possibleScripts) {
+                    try {
+                        await loadScript(script);
+                        console.log('Successfully loaded:', script);
+                        break;
+                    } catch (e) {
+                        console.log('Failed to load:', script);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to initialize game:', error);
+            }
+        }
+        
+        // Start loading the game
+        initGame();
+    <\/script>
+<\/body>
+<\/html>
+`;
+            
+            const blob = new Blob([gameHTML], { type: 'text/html' });
+            const blobUrl = URL.createObjectURL(blob);
+            gameFrame.src = blobUrl;
+            status.textContent = 'Game loaded';
+        }
+
+        function reloadGame() {
+            status.textContent = 'Reloading game...';
+            loadGame();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.getElementById('gameContainer').requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function goBack() {
+            window.location.href = '/';
+        }
+
+        // Load the game when page loads
+        window.onload = loadGame;
+    </script>
+</body>
+</html>

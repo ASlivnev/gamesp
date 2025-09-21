@@ -20,12 +20,45 @@ import (
 
 const (
 	downloadDir    = "resources"
-	requestTimeout = 4 * time.Minute // Increased timeout for complex games
+	requestTimeout = 2 * time.Minute // Increased timeout for complex games
 )
 
 func main() {
-	// Handler for the root path to serve the HTML interface
+	// Handler for the root path and game files
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers for all requests
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// If requesting root, serve index.html
+		if r.URL.Path == "/" {
+			http.ServeFile(w, r, "index.html")
+			return
+		}
+
+		// Try to serve file from resources directory
+		// Look for the file in the most likely game domain folders
+		possiblePaths := []string{
+			filepath.Join("resources", "game-cdn.poki.com", r.URL.Path),
+			filepath.Join("resources", "ccbb109c-df7c-4dc8-9ad5-8c827f18a772.poki-gdn.com", r.URL.Path),
+			filepath.Join("resources", r.URL.Path[1:]), // Remove leading slash
+		}
+
+		for _, path := range possiblePaths {
+			if _, err := os.Stat(path); err == nil {
+				http.ServeFile(w, r, path)
+				return
+			}
+		}
+
+		// If file not found, serve index.html (for SPA routing)
 		http.ServeFile(w, r, "index.html")
 	})
 
@@ -38,14 +71,26 @@ func main() {
 	// Handler for the /clear endpoint to clear resources directory
 	http.HandleFunc("/clear", clearResourcesHandler)
 
-	// Handler to serve the downloaded resources
-	http.Handle("/resources/", http.StripPrefix("/resources/", http.FileServer(http.Dir(downloadDir))))
+	// Handler for serving static files from the resources directory with proper headers
+	http.HandleFunc("/resources/", func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Cross-Origin-Embedder-Policy", "require-corp")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
 
-	port := "8088"
-	log.Printf("Starting server on http://localhost:%s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		http.StripPrefix("/resources/", http.FileServer(http.Dir("resources"))).ServeHTTP(w, r)
+	})
+
+	log.Println("Server starting on :8088")
+	log.Fatal(http.ListenAndServe(":8088", nil))
 }
 
 func scrapeHandler(w http.ResponseWriter, r *http.Request) {
@@ -346,12 +391,36 @@ func downloadResource(rawURL, baseDir string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Close and remove the empty file
+		out.Close()
+		os.Remove(filePath)
 		return fmt.Errorf("bad status for %s: %s", rawURL, resp.Status)
 	}
 
-	_, err = io.Copy(out, resp.Body)
+	// Read the response body to check content
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("io.Copy failed for %s: %w", rawURL, err)
+		out.Close()
+		os.Remove(filePath)
+		return fmt.Errorf("failed to read response body for %s: %w", rawURL, err)
+	}
+
+	// Check if JSON files contain HTML (indicating 404 page)
+	if strings.HasSuffix(strings.ToLower(parsedURL.Path), ".json") {
+		bodyStr := string(body)
+		if strings.Contains(bodyStr, "<!DOCTYPE") || strings.Contains(bodyStr, "<html") {
+			out.Close()
+			os.Remove(filePath)
+			return fmt.Errorf("JSON file %s contains HTML content (likely 404 page)", rawURL)
+		}
+	}
+
+	// Write the body to file
+	_, err = out.Write(body)
+	if err != nil {
+		out.Close()
+		os.Remove(filePath)
+		return fmt.Errorf("failed to write file for %s: %w", rawURL, err)
 	}
 
 	log.Printf("Successfully downloaded %s to %s", rawURL, filePath)
@@ -374,6 +443,11 @@ func parseHTMLForResources(htmlContent, baseURL string) []string {
 		`<source[^>]*src=["']([^"']+)["']`, // Video/audio sources
 		`<iframe[^>]*src=["']([^"']+)["']`, // Iframes
 		`url\(["']?([^"')]+)["']?\)`,       // CSS url() references
+		// WebAssembly specific patterns
+		`["']([^"']*box2d[^"']*\.wasm)["']`, // box2d.wasm files specifically
+		`["']([^"']*\.wasm)["']`,            // Any .wasm files
+		`["']([^"']*\.wasm\.js)["']`,        // .wasm.js files (sometimes used)
+		// General file extensions
 		`["']([^"']*\.(js|css|png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|eot|mp3|wav|ogg|mp4|webm|json|xml|wasm))["']`, // File extensions
 	}
 
@@ -448,6 +522,29 @@ func injectNetworkInterceptor() string {
 			return originalXHROpen.apply(this, arguments);
 		};
 		
+		// Intercept WebAssembly loading
+		if (window.WebAssembly) {
+			const originalInstantiate = WebAssembly.instantiate;
+			WebAssembly.instantiate = function(bytes, imports) {
+				if (typeof bytes === 'string') {
+					window.interceptedURLs.push(bytes);
+					console.log('Intercepted WebAssembly URL:', bytes);
+				}
+				return originalInstantiate.apply(this, arguments);
+			};
+			
+			const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
+			if (originalInstantiateStreaming) {
+				WebAssembly.instantiateStreaming = function(source, imports) {
+					if (source && source.url) {
+						window.interceptedURLs.push(source.url);
+						console.log('Intercepted WebAssembly streaming:', source.url);
+					}
+					return originalInstantiateStreaming.apply(this, arguments);
+				};
+			}
+		}
+		
 		// Intercept dynamic script loading
 		const originalCreateElement = document.createElement;
 		document.createElement = function(tagName) {
@@ -491,7 +588,15 @@ func discoverCommonResources(baseURL string) []string {
 		// Construct 3 common files
 		"/c3main.js",
 		"/data.json",
-		"/box2d.wasm.js",
+		"/gamesetting.json",
+		"/aritemdata.json",
+		"/box2d.wasm",
+		"/box2d.wasm.js", // Sometimes it's named with .js extension
+		"/box2d-release.wasm",
+		"/box2d-debug.wasm",
+		"/physics.wasm",
+		"/game.wasm",
+		"/main.wasm",
 		"/c3runtime.js",
 		"/offlineClient.js",
 		"/register-sw.js",
@@ -499,7 +604,15 @@ func discoverCommonResources(baseURL string) []string {
 		"/workermain.js",
 		"/scripts/c3main.js",
 		"/scripts/data.json",
-		"/scripts/box2d.wasm.js",
+		"/scripts/gamesetting.json",
+		"/scripts/aritemdata.json",
+		"/scripts/box2d.wasm",
+		"/scripts/box2d.wasm.js", // Sometimes it's named with .js extension
+		"/scripts/box2d-release.wasm",
+		"/scripts/box2d-debug.wasm",
+		"/scripts/physics.wasm",
+		"/scripts/game.wasm",
+		"/scripts/main.wasm",
 		"/scripts/c3runtime.js",
 		"/scripts/offlineClient.js",
 		"/scripts/register-sw.js",
@@ -532,53 +645,71 @@ func discoverCommonResources(baseURL string) []string {
 		resources = append(resources, fullURL)
 	}
 
-	// Try to discover image files by common naming patterns
-	imageExtensions := []string{".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"}
-	imageNames := []string{
-		"sprite", "background", "bg", "player", "enemy", "tile", "icon", "logo",
-		"button", "ui", "menu", "game", "level", "character", "item", "weapon",
-		"particle", "effect", "explosion", "coin", "gem", "star", "heart",
+	// Try only essential image files (based on actual game requirements)
+	essentialImages := []string{
+		// App icons
+		"/images/icon-16.png",
+		"/images/icon-32.png",
+		"/images/icon-64.png",
+		"/images/icon-128.png",
+		"/images/icon-256.png",
+		"/images/icon-512.png",
+		// Basic images
+		"/images/logo.png",
+		"/images/loading.png",
+		"/images/splash.png",
+		"/images/background.png",
+		"/images/background.jpg",
+		// Construct 3 sprite sheets (common patterns)
+		"/images/shared-0-sheet0.png",
+		"/images/shared-0-sheet1.png",
+		"/images/shared-0-sheet2.png",
+		"/images/shared-0-sheet3.png",
+		"/images/shared-0-sheet4.png",
+		"/images/shared-0-sheet5.png",
+		// Game-specific sprite sheets
+		"/images/cell-sheet0.png",
+		"/images/weapon-sheet0.png",
+		"/images/obj-sheet0.png",
+		"/images/slide-sheet0.png",
+		"/images/tile-sheet0.png",
+		"/images/transport-sheet0.png",
+		"/images/transport-sheet1.png",
+		"/images/transport-sheet2.png",
+		"/images/armor-sheet0.png",
+		"/images/armorskin-sheet0.png",
+		"/images/bicon-sheet0.png",
+		"/images/loadmap-sheet0.png",
+		"/images/loadmap-sheet1.png",
+		"/images/tiletb-sheet0.png",
 	}
 
-	for _, name := range imageNames {
-		for _, ext := range imageExtensions {
-			for i := 0; i < 10; i++ { // Try numbered variants
-				if i == 0 {
-					// Try without number
-					fullURL := fmt.Sprintf("%s://%s%s/images/%s%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, name, ext)
-					resources = append(resources, fullURL)
-				} else {
-					// Try with number
-					fullURL := fmt.Sprintf("%s://%s%s/images/%s%d%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, name, i, ext)
-					resources = append(resources, fullURL)
-				}
-			}
-		}
+	for _, img := range essentialImages {
+		fullURL := fmt.Sprintf("%s://%s%s%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, img)
+		resources = append(resources, fullURL)
 	}
 
-	// Try common audio files
-	audioExtensions := []string{".mp3", ".wav", ".ogg", ".m4a", ".webm"}
-	audioNames := []string{
-		"music", "sound", "sfx", "bgm", "background", "click", "jump", "shoot",
-		"explosion", "pickup", "coin", "powerup", "victory", "defeat", "menu",
+	// Try only essential audio files (reduced brute force)
+	essentialAudio := []string{
+		"/sounds/music.mp3",
+		"/sounds/music.ogg",
+		"/sounds/background.mp3",
+		"/sounds/background.ogg",
+		"/audio/music.mp3",
+		"/audio/music.ogg",
+		"/audio/background.mp3",
+		"/audio/background.ogg",
+		"/media/music.mp3",
+		"/media/music.ogg",
+		// Common Construct 3 audio patterns
+		"/media/music.webm",
+		"/media/sound.webm",
+		"/media/sfx.webm",
 	}
 
-	for _, name := range audioNames {
-		for _, ext := range audioExtensions {
-			for i := 0; i < 5; i++ { // Try numbered variants
-				if i == 0 {
-					fullURL := fmt.Sprintf("%s://%s%s/sounds/%s%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, name, ext)
-					resources = append(resources, fullURL)
-					fullURL2 := fmt.Sprintf("%s://%s%s/audio/%s%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, name, ext)
-					resources = append(resources, fullURL2)
-					fullURL3 := fmt.Sprintf("%s://%s%s/media/%s%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, name, ext)
-					resources = append(resources, fullURL3)
-				} else {
-					fullURL := fmt.Sprintf("%s://%s%s/sounds/%s%d%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, name, i, ext)
-					resources = append(resources, fullURL)
-				}
-			}
-		}
+	for _, audio := range essentialAudio {
+		fullURL := fmt.Sprintf("%s://%s%s%s", baseURLParsed.Scheme, baseURLParsed.Host, basePath, audio)
+		resources = append(resources, fullURL)
 	}
 
 	return resources
