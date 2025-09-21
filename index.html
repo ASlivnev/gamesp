@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Scraper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        input[type="url"] {
+            width: 400px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #0c853c;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0a662e;
+        }
+        #status {
+            margin-top: 20px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HTML5 Game Scraper</h1>
+        <form id="scrapeForm">
+            <input type="url" id="gameURL" name="gameURL" placeholder="Enter game URL" required>
+            <button type="submit">Download Game</button>
+        </form>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        document.getElementById('scrapeForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const url = document.getElementById('gameURL').value;
+            const statusDiv = document.getElementById('status');
+            
+            statusDiv.textContent = 'Starting download... Check console for progress.';
+
+            fetch('/scrape', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'gameURL=' + encodeURIComponent(url)
+            })
+            .then(response => response.text())
+            .then(data => {
+                statusDiv.textContent = data;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusDiv.textContent = 'An error occurred. See browser console for details.';
+            });
+        });
+    </script>
+</body>
+</html>
