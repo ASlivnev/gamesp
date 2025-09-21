@@ -10,9 +10,10 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
             background-color: #f0f2f5;
+            padding: 20px;
         }
         .container {
             text-align: center;
@@ -20,10 +21,60 @@
             padding: 40px;
             border-radius: 10px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            width: 100%;
         }
         h1 {
             color: #333;
+            margin-bottom: 30px;
+        }
+        .scrapers {
+            display: flex;
+            gap: 40px;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+        .scraper-section {
+            flex: 1;
+            padding: 30px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            background-color: #fafbfc;
+        }
+        .scraper-section.advanced {
+            border-color: #0c853c;
+        }
+        .scraper-section.simple {
+            border-color: #1877f2;
+        }
+        .scraper-section h2 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        .scraper-section.advanced h2 {
+            color: #0c853c;
+        }
+        .scraper-section.simple h2 {
+            color: #1877f2;
+        }
+        .description {
+            font-size: 0.9rem;
+            color: #666;
             margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        .features {
+            text-align: left;
+            margin-bottom: 20px;
+        }
+        .features ul {
+            margin: 0;
+            padding-left: 20px;
+            font-size: 0.85rem;
+            color: #555;
+        }
+        .features li {
+            margin-bottom: 5px;
         }
         form {
             display: flex;
@@ -31,50 +82,156 @@
             gap: 15px;
         }
         input[type="url"] {
-            width: 400px;
-            padding: 10px;
+            width: 100%;
+            padding: 12px;
             border: 1px solid #ccc;
             border-radius: 5px;
             font-size: 1rem;
+            box-sizing: border-box;
         }
         button {
-            padding: 10px 20px;
+            padding: 12px 20px;
             border: none;
             border-radius: 5px;
-            background-color: #0c853c;
             color: white;
             font-size: 1rem;
             cursor: pointer;
             transition: background-color 0.2s;
+            font-weight: 600;
         }
-        button:hover {
+        .advanced button {
+            background-color: #0c853c;
+        }
+        .advanced button:hover {
             background-color: #0a662e;
         }
+        .simple button {
+            background-color: #1877f2;
+        }
+        .simple button:hover {
+            background-color: #166fe5;
+        }
         #status {
-            margin-top: 20px;
+            margin-top: 30px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #0c853c;
             color: #555;
+            display: none;
+        }
+        #status.show {
+            display: block;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .badge.new {
+            background-color: #0c853c;
+            color: white;
+        }
+        .badge.classic {
+            background-color: #1877f2;
+            color: white;
+        }
+        #clearButton:hover {
+            background-color: #c82333 !important;
+        }
+        .clear-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e1e5e9;
+            text-align: center;
+        }
+        .clear-description {
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 15px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>HTML5 Game Scraper</h1>
-        <form id="scrapeForm">
-            <input type="url" id="gameURL" name="gameURL" placeholder="Enter game URL" required>
-            <button type="submit">Download Game</button>
-        </form>
+        <h1>🎮 HTML5 Game Scraper</h1>
+        
+        <div class="scrapers">
+            <!-- Advanced Scraper -->
+            <div class="scraper-section advanced">
+                <div class="badge new">New & Improved</div>
+                <h2>🚀 Advanced Scraper</h2>
+                <div class="description">
+                    Мощный скрапер с множественными методами обнаружения ресурсов
+                </div>
+                <div class="features">
+                    <ul>
+                        <li>JavaScript перехват (fetch, XHR)</li>
+                        <li>HTML парсинг ссылок</li>
+                        <li>Брутфорс поиск файлов</li>
+                        <li>Взаимодействие с игрой</li>
+                        <li>Расширенное логирование</li>
+                        <li>Поиск Construct 3 файлов</li>
+                    </ul>
+                </div>
+                <form id="advancedForm">
+                    <input type="url" id="advancedURL" name="gameURL" placeholder="Enter game URL" required>
+                    <button type="submit">🔍 Advanced Download</button>
+                </form>
+            </div>
+
+            <!-- Simple Scraper -->
+            <div class="scraper-section simple">
+                <div class="badge classic">Classic</div>
+                <h2>⚡ Simple Scraper</h2>
+                <div class="description">
+                    Быстрый и простой скрапер, основанный на сетевых событиях
+                </div>
+                <div class="features">
+                    <ul>
+                        <li>Базовый перехват запросов</li>
+                        <li>Быстрая работа</li>
+                        <li>Меньше ресурсов</li>
+                        <li>Простое логирование</li>
+                        <li>Стабильная работа</li>
+                        <li>Проверенный алгоритм</li>
+                    </ul>
+                </div>
+                <form id="simpleForm">
+                    <input type="url" id="simpleURL" name="gameURL" placeholder="Enter game URL" required>
+                    <button type="submit">⚡ Simple Download</button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Clear Resources Button -->
+        <div class="clear-section">
+            <div class="clear-description">
+                Очистить папку resources от всех скачанных файлов
+            </div>
+            <button id="clearButton" style="background-color: #dc3545; padding: 10px 20px; border: none; border-radius: 5px; color: white; font-size: 0.9rem; cursor: pointer; transition: background-color 0.2s; font-weight: 600;">
+                🗑️ Clear Resources Directory
+            </button>
+        </div>
+        
         <div id="status"></div>
     </div>
 
     <script>
-        document.getElementById('scrapeForm').addEventListener('submit', function(event) {
+        function handleScrape(event, endpoint, scraperType) {
             event.preventDefault();
-            const url = document.getElementById('gameURL').value;
+            const form = event.target;
+            const url = form.querySelector('input[type="url"]').value;
             const statusDiv = document.getElementById('status');
             
-            statusDiv.textContent = 'Starting download... Check console for progress.';
+            statusDiv.textContent = `Starting ${scraperType} scraping... Check console for progress.`;
+            statusDiv.className = 'show';
 
-            fetch('/scrape', {
+            fetch(endpoint, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -88,6 +245,46 @@
             .catch(error => {
                 console.error('Error:', error);
                 statusDiv.textContent = 'An error occurred. See browser console for details.';
+            });
+        }
+
+        document.getElementById('advancedForm').addEventListener('submit', function(event) {
+            handleScrape(event, '/scrape', 'advanced');
+        });
+
+        document.getElementById('simpleForm').addEventListener('submit', function(event) {
+            handleScrape(event, '/scrape-simple', 'simple');
+        });
+
+        document.getElementById('clearButton').addEventListener('click', function() {
+            const statusDiv = document.getElementById('status');
+            const button = this;
+            
+            // Confirm before clearing
+            if (!confirm('Вы уверены, что хотите очистить папку resources? Все скачанные файлы будут удалены.')) {
+                return;
+            }
+            
+            // Disable button and show status
+            button.disabled = true;
+            button.textContent = '🔄 Clearing...';
+            statusDiv.textContent = 'Clearing resources directory... Check console for progress.';
+            statusDiv.className = 'show';
+
+            fetch('/clear', {
+                method: 'POST'
+            })
+            .then(response => response.text())
+            .then(data => {
+                statusDiv.textContent = data;
+                button.disabled = false;
+                button.innerHTML = '🗑️ Clear Resources Directory';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                statusDiv.textContent = 'An error occurred while clearing. See browser console for details.';
+                button.disabled = false;
+                button.innerHTML = '🗑️ Clear Resources Directory';
             });
         });
     </script>
